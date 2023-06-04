@@ -311,18 +311,28 @@ class ControlLDM(LatentDiffusion):
         super().__init__(*args, **kwargs)
         self.control_model = instantiate_from_config(control_stage_config)
         self.control_key = control_key
+        print(f" setting contorl key f{control_key}")
         self.only_mid_control = only_mid_control
         self.control_scales = [1.0] * 13
 
     @torch.no_grad()
     def get_input(self, batch, k, bs=None, *args, **kwargs):
         x, c = super().get_input(batch, self.first_stage_key, *args, **kwargs)
-        control = batch[self.control_key]
+        control_1 = batch["hint1"]
+        control_2 = batch["hint2"]
         if bs is not None:
-            control = control[:bs]
-        control = control.to(self.device)
-        control = einops.rearrange(control, 'b h w c -> b c h w')
-        control = control.to(memory_format=torch.contiguous_format).float()
+            control_1 = control_1[:bs]
+            control_2 = control_2[:bs]
+        control_1 = control_1.to(self.device)
+        control_1 = einops.rearrange(control_1, 'b h w c -> b c h w')
+        control_1 = control_1.to(memory_format=torch.contiguous_format).float()
+        control_2 = control_2.to(self.device)
+        control_2 = einops.rearrange(control_2, 'b h w c -> b c h w')
+        control_2 = control_2.to(memory_format=torch.contiguous_format).float()
+        
+            # concatenate the control_1 and control_2 tensors along the channel dimension
+        control = torch.cat((control_1, control_2), dim=1)
+        
         return x, dict(c_crossattn=[c], c_concat=[control])
 
     def apply_model(self, x_noisy, t, cond, *args, **kwargs):
